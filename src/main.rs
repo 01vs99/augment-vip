@@ -24,6 +24,28 @@ fn get_jetbrains_config_dir() -> Option<PathBuf> {
         .find(|path| path.exists())
 }
 
+// New function to process JetBrains files
+fn process_jetbrains() -> Result<()> {
+    if let Some(jetbrains_dir) = get_jetbrains_config_dir() {
+        println!("JetBrains configuration directory found: {}", jetbrains_dir.display());
+
+        let id_files = ["UGVybWFuZW50RGV2aWNlSWQ=", "UGVybWFuZW50VXNlcklk"];
+
+        for file_name in &id_files {
+            let file_path = jetbrains_dir.join(String::from_utf8(general_purpose::STANDARD.decode(file_name)?)?);
+            // Use ? to propagate errors immediately within this function
+            update_id_file(&file_path)?;
+            lock_file(&file_path)?;
+        }
+
+        println!("JetBrains ID files have been updated and locked successfully!");
+        Ok(())
+    } else {
+        // If directory not found, this function should indicate failure
+        Err("JetBrains configuration directory not found".into())
+    }
+}
+
 fn get_vscode_files(id: &str) -> Option<Vec<PathBuf>> {
     let base_dirs = [dirs::config_dir(), dirs::home_dir(), dirs::data_dir()];
     let path_patterns = [
@@ -51,6 +73,30 @@ fn get_vscode_files(id: &str) -> Option<Vec<PathBuf>> {
         .collect();
 
     (!vscode_dirs.is_empty()).then_some(vscode_dirs)
+}
+
+// New function to process VSCode directories
+fn process_vscode() -> Result<()> {
+    if let Some(vscode_dirs) = get_vscode_files(&String::from_utf8(general_purpose::STANDARD.decode("bWFjaGluZUlk")?)?) {
+        println!("VSCode variants found.");
+
+        let vscode_keys = ["dGVsZW1ldHJ5Lm1hY2hpbmVJZA==", "dGVsZW1ldHJ5LmRldkRldmljZUlk", "dGVsZW1ldHJ5Lm1hY01hY2hpbmVJZA=="];
+        let count_query = String::from_utf8(general_purpose::STANDARD.decode("U0VMRUNUIENPVU5UKCopIEZST00gSXRlbVRhYmxlIFdIRVJFIGtleSBMSUtFICclYXVnbWVudCUnOw==")?)?;
+        let delete_query = String::from_utf8(general_purpose::STANDARD.decode("REVMRVRFIEZST00gSXRlbVRhYmxlIFdIRVJFIGtleSBMSUtFICclYXVnbWVudCUnOw==")?)?;
+
+        for vscode_dir in vscode_dirs {
+            // Use ? to propagate errors immediately within this function
+            update_vscode_files(&vscode_dir, &vscode_keys)?;
+            clean_database(&vscode_dir, &count_query, &delete_query)?;
+        }
+
+        println!("All found VSCode variants\' ID files have been updated and databases cleaned successfully!");
+        Ok(())
+    } else {
+        println!("No VSCode variants found");
+        // If no directories found, indicate failure as per plan refinement
+        Err("No VSCode variants found".into())
+    }
 }
 
 fn update_id_file(file_path: &Path) -> Result<()> {
@@ -127,48 +173,42 @@ fn update_vscode_files(vscode_file_path: &Path, vscode_keys: &[&str; 3]) -> Resu
 }
 
 fn run() -> Result<()> {
-    let mut programs_found = false;
-
-    // Try to find and update JetBrains
-    if let Some(jetbrains_dir) = get_jetbrains_config_dir() {
-        programs_found = true;
-
-        let id_files = ["UGVybWFuZW50RGV2aWNlSWQ=", "UGVybWFuZW50VXNlcklk"];
-
-        for file_name in &id_files {
-            let file_path = jetbrains_dir.join(String::from_utf8(general_purpose::STANDARD.decode(file_name)?)?);
-            update_id_file(&file_path)?;
-            lock_file(&file_path)?;
-        }
-
-        println!("JetBrains ID files have been updated and locked successfully!");
-    } else {
-        println!("JetBrains configuration directory not found");
+    // Call process_jetbrains and handle its error independently
+    let jetbrains_result = process_jetbrains();
+    if let Err(e) = jetbrains_result {
+        eprintln!("Error during JetBrains processing: {}", e);
+        // Continue execution even if JetBrains processing failed
     }
 
-    // Try to find and update VSCode variants
-    if let Some(vscode_dirs) = get_vscode_files(&String::from_utf8(general_purpose::STANDARD.decode("bWFjaGluZUlk")?)?) {
-        programs_found = true;
-
-        let vscode_keys = ["dGVsZW1ldHJ5Lm1hY2hpbmVJZA==", "dGVsZW1ldHJ5LmRldkRldmljZUlk", "dGVsZW1ldHJ5Lm1hY01hY2hpbmVJZA=="];
-        let count_query = String::from_utf8(general_purpose::STANDARD.decode("U0VMRUNUIENPVU5UKCopIEZST00gSXRlbVRhYmxlIFdIRVJFIGtleSBMSUtFICclYXVnbWVudCUnOw==")?)?;
-        let delete_query = String::from_utf8(general_purpose::STANDARD.decode("REVMRVRFIEZST00gSXRlbVRhYmxlIFdIRVJFIGtleSBMSUtFICclYXVnbWVudCUnOw==")?)?;
-
-        for vscode_dir in vscode_dirs {
-            update_vscode_files(&vscode_dir, &vscode_keys)?;
-            clean_database(&vscode_dir, &count_query, &delete_query)?;
-        }
-
-        println!("All found VSCode variants' ID files have been updated and databases cleaned successfully!");
-    } else {
-        println!("No VSCode variants found");
+    // Call process_vscode and handle its error independently
+    let vscode_result = process_vscode();
+    if let Err(e) = vscode_result {
+        eprintln!("Error during VSCode processing: {}", e);
+        // Continue execution even if VSCode processing failed
     }
 
-    // Error only if no programs were found at all
-    if !programs_found {
-        return Err("No JetBrains or VSCode installations found".into());
+    // Note: The final programs_found check will be adjusted in the next step (Step 4)
+    // to reflect whether at least one program type was found and *attempted* to process.
+    // For now, we'll keep a placeholder or rely on the next step to fix the final logic.
+
+    // Placeholder for final check, will be refined in Step 4
+    // We need a way to determine if at least one program was found overall.
+    // Let's refine this in the next step based on the success/failure of finding directories.
+
+    // The original programs_found logic relied on finding directories *before* processing.
+    // We need to update this logic to check if get_jetbrains_config_dir() or get_vscode_files()
+    // returned Some.
+
+    let jetbrains_found = get_jetbrains_config_dir().is_some();
+    let vscode_found = get_vscode_files(&String::from_utf8(general_purpose::STANDARD.decode("bWFjaGluZUlk")?)?).is_some(); // Need to potentially handle this decode error if it wasn't already handled elsewhere
+
+    if !jetbrains_found && !vscode_found {
+         return Err("No JetBrains or VSCode installations found".into());
     }
-    
+
+
+    // If at least one was found (even if processing failed), return Ok(())
+    // because specific errors were already printed.
     Ok(())
 }
 
